@@ -215,21 +215,19 @@ def analizar_con_datos(pregunta_usuario: str, hist_text: str, df: Optional[pd.Da
         print(f"Error en el análisis: {e}")
         return f"No pude generar el análisis. Error: {e}"
 
-
 def generar_resumen_tabla(pregunta_usuario: str, res: dict, llm_analista: ChatOpenAI) -> dict:
     print("Generando resumen de tabla...")
     df = res.get("df")
     if df is None or df.empty:
         return res
-    prompt = f"""
-    Actúa como IANA, un analista de datos amable y servicial.
-    Tu tarea es escribir una breve y conversacional introducción para la tabla de datos que estás a punto de mostrar.
-    Basa tu respuesta en la pregunta del usuario para que se sienta como una continuación natural de la conversación.
-    Si la respuesta no le gustó al USUARIO, disculpate es posible que le entendiste mal.
-    
-    IMPORTANTE: Varía tus respuestas. No uses siempre la misma frase "Por supuesto". Suena natural y humana.
 
-    Pregunta del usuario: "{pregunta_usuario}"
+    # --- INICIO DE LA MODIFICACIÓN DEL PROMPT ---
+    prompt = f"""
+    <<< REGLA CRÍTICA >>>
+    Tu ÚNICA tarea es escribir una frase CORTA y amable que sirva como introducción a la tabla de datos que se mostrará.
+    NO respondas la pregunta original del usuario de forma general. Sé breve, directo y conversacional. Tu respuesta debe ser una sola línea.
+
+    Pregunta original del usuario: "{pregunta_usuario}"
     
     ---
     Aquí tienes varios ejemplos de cómo responder:
@@ -241,18 +239,15 @@ def generar_resumen_tabla(pregunta_usuario: str, res: dict, llm_analista: ChatOp
     Ejemplo 2:
     Pregunta: "y sus ventas?"
     Respuesta: "He consultado las cifras de ventas. Te las muestro en la siguiente tabla:"
-
+    
     Ejemplo 3:
-    Pregunta: "y en q % esta su consumo?"
-    Respuesta: "Perfecto, aquí está el desglose de los porcentajes de consumo que pediste:"
-
-    Ejemplo 4:
     Pregunta: "dame el total por mes"
-    Respuesta: "Claro que sí. He preparado la tabla con los totales por mes:"
+    Respuesta: "Claro que sí. He preparado una tabla con los totales por mes:"
     ---
 
-    Ahora, genera la introducción para la pregunta del usuario actual:
+    Ahora, genera la introducción para la pregunta del usuario actual. Sé breve.
     """
+    # --- FIN DE LA MODIFICACIÓN DEL PROMPT ---
     try:
         introduccion = llm_analista.invoke(prompt).content
         res["texto"] = introduccion
@@ -260,7 +255,6 @@ def generar_resumen_tabla(pregunta_usuario: str, res: dict, llm_analista: ChatOp
         print(f"Error generando resumen: {e}")
         res["texto"] = "Aquí están los datos que solicitaste:"
     return res
-
 
 def responder_conversacion(pregunta_usuario: str, hist_text: str, llm_analista: ChatOpenAI) -> dict:
     print("Generando respuesta conversacional...")
@@ -363,3 +357,4 @@ def enviar_correo_agente(recipient: str, subject: str, body: str, df: Optional[p
 def validar_y_corregir_respuesta_analista(pregunta_usuario: str, res_analisis: dict, hist_text: str):
     # Esta función no se usa activamente en el grafo actual, pero se deja para el futuro
     pass
+
