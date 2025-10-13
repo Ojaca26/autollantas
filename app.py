@@ -14,14 +14,14 @@ from graph_builder import create_graph
 # ============================================
 # 0) Configuración de la Página y Título
 # ============================================
-st.set_page_config(page_title="IANA con LangGraph", page_icon="logo_automundial.png", layout="wide")
+st.set_page_config(page_title="IANA con LangGraph", page_icon="logo_autollantas.png", layout="wide")
 
 col1, col2 = st.columns([1, 4])
 with col1:
-    st.image("logo_automundial.png", width=120)
+    st.image("logo_autollantas.png", width=120)
 with col2:
     st.title("IANA: Tu Asistente IA para Análisis de Datos")
-    st.markdown("Soy la red de agentes IA de **Automundial**. Pregúntame algo sobre tu negocio.")
+    st.markdown("Soy la red de agentes IA de **AutoLLantas**. Pregúntame algo sobre tu negocio.")
 
 # ============================================
 # 1) Conexión a BD, LLMs y Grafo (Manejo de Cache)
@@ -127,4 +127,5 @@ def procesar_pregunta(prompt: str):
 # Input del usuario (texto o voz) - sin cambios
 prompt = st.chat_input("Escribe tu pregunta aquí...")
 if prompt:
+
     procesar_pregunta(prompt)
