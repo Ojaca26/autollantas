@@ -6,4 +6,3 @@ langchain-community
 langgraph
 sqlalchemy
 pymysql
-pygraphviz
