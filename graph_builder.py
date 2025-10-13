@@ -15,7 +15,8 @@ from tools import (
     enviar_correo_agente,
     generar_resumen_tabla,
     get_history_text,
-    clasificar_intencion
+    clasificar_intencion,
+    validar_y_corregir_respuesta_analista # Importación añadida para completitud
 )
 
 # ===============================================================
@@ -35,7 +36,7 @@ class AgentState(TypedDict):
     error: Optional[str]
 
 # ===============================================================
-# 2. DEFINICIÓN DE LOS NODOS DEL GRAFO (LOS AGENTES TRABAJORES)
+# 2. DEFINICIÓN DE LOS NODOS DEL GRAFO (LOS AGENTES TRABAJADORES)
 # ===============================================================
 # Cada nodo es una función que realiza una tarea específica.
 # Recibe el estado actual y devuelve un diccionario con los campos del estado que actualiza.
