@@ -10,7 +10,7 @@ from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 from typing import Optional
 
-import streamlit as st # <-- Importante: Añadido para leer los secretos
+import streamlit as st
 from sqlalchemy import text
 from langchain_openai import ChatOpenAI
 from langchain_community.utilities import SQLDatabase
@@ -46,7 +46,7 @@ def get_history_text(chat_history: list, n_turns=3) -> str:
         return ""
     return "\n--- Contexto de Conversación Anterior ---\n" + "\n".join(history_text) + "\n--- Fin del Contexto ---\n"
 
-def _df_preview(df: pd.DataFrame, n: int = 5) -> str:
+def _df_preview(df: pd.DataFrame, n: int = 50) -> str:
     if df is None or df.empty:
         return ""
     try:
@@ -66,31 +66,91 @@ def _asegurar_select_only(sql: str) -> str:
 # ============================================
 
 def clasificar_intencion(pregunta: str, llm_orq: ChatOpenAI) -> str:
-    # ... (Tu código de clasificación original - sin cambios)
     prompt_orq = f"""
-Clasifica la intención del usuario en UNA SOLA PALABRA...
+Clasifica la intención del usuario en UNA SOLA PALABRA. Presta especial atención a los verbos de acción y palabras clave.
+
+1. `analista`: Si la pregunta pide explícitamente una interpretación, resumen, comparación o explicación.
+   PALABRAS CLAVE PRIORITARIAS: analiza, compara, resume, explica, por qué, tendencia, insights, dame un análisis, haz un resumen, interpreta.
+   Si una de estas palabras clave está presente, la intención SIEMPRE es `analista`.
+
+2. `consulta`: Si la pregunta pide datos crudos (listas, conteos, totales, valores, métricas) o resultados numéricos directos, y NO contiene palabras clave de `analista`.
+   Ejemplos: 'cuántos proveedores hay', 'lista todos los productos', 'muéstrame el total', 'ventas por mes', 'margen por cliente', 'costo total', 'precio promedio'.
+   PALABRAS CLAVE ADICIONALES: venta, ventas, costo, costos, margen, precio, unidades, rubro, cliente, artículo, producto, línea, familia, total, facturado, utilidad.
+
+3. `correo`: Si la pregunta pide explícitamente enviar un correo, email o reporte.
+   PALABRAS CLAVE: envía, mandar, correo, email, reporte a, envíale a.
+
+4. `conversacional`: Si es un saludo o una pregunta general no relacionada con datos.
+   Ejemplos: 'hola', 'gracias', 'qué puedes hacer', 'cómo estás'.
+
 Pregunta: "{pregunta}"
 Clasificación:
 """
     try:
         opciones = {"consulta", "analista", "conversacional", "correo"}
         r = llm_orq.invoke(prompt_orq).content.strip().lower().replace('"', '').replace("'", "")
+
+        if any(pal in pregunta.lower() for pal in ["analiza", "compara", "resume", "explica", "por qué", "tendencia", "insights"]):
+             return "analista"
+
+        if r in opciones:
+            return r
+        
         if any(pal in pregunta.lower() for pal in ["venta", "ventas", "margen", "costo", "costos", "precio", "unidades", "rubro", "cliente", "artículo", "producto", "línea", "familia", "total", "facturado"]):
             return "consulta"
-        return r if r in opciones else "consulta"
+        
+        return "conversacional" # Default más seguro
     except Exception:
-        return "consulta"
+        return "conversacional"
 
 
 def ejecutar_sql_real(pregunta_usuario: str, hist_text: str, llm_sql: ChatOpenAI, db: SQLDatabase):
     print("Traduciendo pregunta a SQL...")
-    # Asegúrate de pegar aquí tu prompt de SQL completo con todas las reglas de negocio
     prompt_con_instrucciones = f"""
-    Tu tarea es generar una consulta SQL limpia (SOLO SELECT) sobre la tabla `automundial` para responder la pregunta del usuario.
-    
-    <<< REGLAS CRÍTICAS, DE FECHA, DE PRODUCTO, ETC. >>>
-    (Pega aquí el prompt largo y detallado que tenías en tu archivo original)
+    Tu tarea es generar una consulta SQL limpia (SOLO SELECT) sobre la tabla `autollantas` para responder la pregunta del usuario.
 
+    ---
+    <<< NUEVA REGLA: PARA VALORES MONETARIOS >>>
+     1. Cuando el usuario mencione “margen”, “margen bruto” o “ganancia bruta”, se debe consultar la información en la columna 'Porcentaje_Margen_Bruto', que representa el **margen relativo** (porcentaje de utilidad sobre ventas).  
+       Si el usuario pide explícitamente “margen en pesos”, “margen monetario” o “margen absoluto”, entonces usa la columna 'Margen_Bruto', que representa el **margen absoluto** (valor monetario de la utilidad bruta).  
+       Ejemplo:  
+       - “Dame el margen bruto por mes” → usa `Porcentaje_Margen_Bruto`  
+       - “Dame el margen absoluto en pesos” → usa `Margen_Bruto`
+       
+       ❗Nunca promedies el margen ni uses AVG(Porcentaje_Margen_Bruto).  
+       El margen relativo SIEMPRE debe calcularse dinámicamente como:
+         (1 - SUM(Costo_Reales) / SUM(Ventas_Reales)) * 100
+       o equivalente:
+         (SUM(Ventas_Reales - Costo_Reales) / SUM(Ventas_Reales)) * 100
+       según el nivel de agrupación.
+       Ejemplo:
+       SELECT MONTH(Fecha) AS Mes, 
+              (1 - SUM(Costo_Reales) / SUM(Ventas_Reales)) * 100 AS Margen_Porcentual
+       FROM autollantas
+       GROUP BY MONTH(Fecha);
+       
+     2. Cuando el usuario mencione “porcentaje de margen”, “% margen”, “margen porcentual” o “margen en porcentaje”, se debe consultar la información en la columna 'Porcentaje_Margen_Bruto', que representa la proporción del margen bruto sobre las ventas reales.
+     3. Cuando el usuario mencione “unidades vendidas”, “cantidad de productos vendidos” o “número de ventas”, se está refiriendo al campo 'Unidades_Vendidas'.
+     4. Cuando el usuario pregunte por “precio promedio”, “valor medio de venta” o “promedio de precios”, se refiere al campo 'Precio_Promedio', que corresponde al promedio del valor unitario de las ventas.
+     5. Cuando el usuario mencione “ventas reales”, “ventas totales” o “valor vendido”, se está refiriendo al campo 'Ventas_Reales', que representa el total monetario facturado o reconocido como ingreso real.
+     6. Cuando el usuario mencione “costos reales”, “costos totales” o “valor del costo”, se refiere al campo Costo_Reales, que muestra el total de costos asociados a las ventas (sin incluir margen ni impuestos).
+     7. Ejemplo: Si la pregunta es "¿cuál es el total facturado?", la consulta debería ser algo como `SELECT SUM(Ventas_Reales) FROM autollantas;`. Aplica este patrón a otras métricas.
+    ---
+    <<< REGLA CRÍTICA PARA FILTRAR POR FECHA >>>
+    1. Tu tabla tiene una columna de fecha llamada `Fecha`.
+    2. Si el usuario especifica un año (ej: "del 2025", "en 2024"), SIEMPRE debes añadir una condición `WHERE YEAR(Fecha) = [año]` a la consulta.
+    3. Ejemplo: "dame las ventas de 2025" -> DEBE INCLUIR `WHERE YEAR(Fecha) = 2025`.
+    ---
+    <<< REGLA DE ORO PARA BÚSQUEDA DE PRODUCTOS >>>
+    1. Cuando el usuario mencione “artículo”, “producto”, “ítem”, “referencia”, “nombre del repuesto” o “nombre del material”, se está refiriendo al campo 'Nombre_Articulo', el cual contiene el nombre comercial o técnico de cada producto registrado en inventario o en las órdenes.
+       Este campo puede incluir detalles como:
+       - Medidas o especificaciones (ej. 195/60R16, 11R-22.5)
+       - Marca o fabricante (ej. Yokohama, Firestone, Alliance)
+       - Tipo o aplicación (ej. filtro de combustible, llanta, aire, repuesto)
+    2. Si el usuario pregunta por un producto específico, usa `WHERE LOWER(Nombre_Articulo) LIKE '%palabra%'.
+    3. Cuando el usuario mencione “cliente”, “empresa”, “razón social”, “comprador”, “contratante” o “nombre del cliente”, se está refiriendo al campo 'Nombre_Cliente', que representa la entidad (persona natural o jurídica) a la que se le vendió, facturó o prestó un servicio.
+    4. Cuando el usuario mencione “línea”, “marca”, “familia de producto”, “referencia comercial” o “proveedor principal”, se está refiriendo al campo 'Nombre_Linea', el cual identifica la marca, línea o categoría principal a la que pertenece un artículo.
+    ---
     {hist_text}
     Pregunta del usuario: "{pregunta_usuario}"
     Devuelve SOLO la consulta SQL (sin explicaciones).
@@ -121,16 +181,32 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str, llm_sql: ChatOpenAI
 
 
 def analizar_con_datos(pregunta_usuario: str, hist_text: str, df: Optional[pd.DataFrame], llm_analista: ChatOpenAI) -> str:
-    # ... (Tu código de análisis original - sin cambios)
     print("Generando análisis de datos...")
-    preview = _df_preview(df, 50) or "(sin datos para analizar)"
+    preview = _df_preview(df) or "(sin datos para analizar)"
     prompt_analisis = f"""
-    Eres IANA, un analista de datos senior EXTREMADAMENTE PRECISO.
-    (Pega aquí tus reglas de precisión y formato obligatorio)
+    Eres IANA, un analista de datos senior EXTREMADAMENTE PRECISO y riguroso.
+    ---
+    <<< REGLAS CRÍTICAS DE PRECISIÓN >>>
+    1. **NO ALUCINAR**: NUNCA inventes números, totales, porcentajes o nombres de productos/categorías que no estén EXPRESAMENTE en la tabla de 'Datos'.
+    2. **DATOS INCOMPLETOS**: Reporta los vacíos (p.ej., "sin datos para Marzo") sin inventar valores.
+    3. **VERIFICAR CÁLCULOS**: Antes de escribir un número, revisa el cálculo (sumas/conteos/promedios) con los datos.
+    4. **CITAR DATOS**: Basa CADA afirmación que hagas en los datos visibles en la tabla.
+    ---
     Pregunta Original: {pregunta_usuario}
     {hist_text}
     Datos para tu análisis (usa SÓLO estos):
     {preview}
+    ---
+    FORMATO OBLIGATORIO:
+    📌 Análisis Ejecutivo de datos:
+    1. Calcular totales y porcentajes clave.
+    2. Detectar concentración.
+    3. Identificar patrones temporales.
+    4. Analizar dispersión.
+    Entregar el resultado en 3 bloques:
+    📌 Resumen Ejecutivo: hallazgos principales con números.
+    🔍 Números de referencia: totales, promedios, ratios.
+    ⚠ Importante: Sé muy breve, directo y diciente.
     """
     try:
         analisis = llm_analista.invoke(prompt_analisis).content
@@ -141,15 +217,40 @@ def analizar_con_datos(pregunta_usuario: str, hist_text: str, df: Optional[pd.Da
 
 
 def generar_resumen_tabla(pregunta_usuario: str, res: dict, llm_analista: ChatOpenAI) -> dict:
-    # ... (Tu código de resumen original - sin cambios)
     print("Generando resumen de tabla...")
     df = res.get("df")
     if df is None or df.empty:
         return res
     prompt = f"""
-    Actúa como IANA, un analista de datos amable.
-    (Pega aquí tus ejemplos de respuestas variadas)
+    Actúa como IANA, un analista de datos amable y servicial.
+    Tu tarea es escribir una breve y conversacional introducción para la tabla de datos que estás a punto de mostrar.
+    Basa tu respuesta en la pregunta del usuario para que se sienta como una continuación natural de la conversación.
+    Si la respuesta no le gustó al USUARIO, disculpate es posible que le entendiste mal.
+    
+    IMPORTANTE: Varía tus respuestas. No uses siempre la misma frase "Por supuesto". Suena natural y humana.
+
     Pregunta del usuario: "{pregunta_usuario}"
+    
+    ---
+    Aquí tienes varios ejemplos de cómo responder:
+
+    Ejemplo 1:
+    Pregunta: "cuáles son los proveedores"
+    Respuesta: "¡Listo! Aquí tienes la lista de proveedores que encontré:"
+
+    Ejemplo 2:
+    Pregunta: "y sus ventas?"
+    Respuesta: "He consultado las cifras de ventas. Te las muestro en la siguiente tabla:"
+
+    Ejemplo 3:
+    Pregunta: "y en q % esta su consumo?"
+    Respuesta: "Perfecto, aquí está el desglose de los porcentajes de consumo que pediste:"
+
+    Ejemplo 4:
+    Pregunta: "dame el total por mes"
+    Respuesta: "Claro que sí. He preparado la tabla con los totales por mes:"
+    ---
+
     Ahora, genera la introducción para la pregunta del usuario actual:
     """
     try:
@@ -162,9 +263,9 @@ def generar_resumen_tabla(pregunta_usuario: str, res: dict, llm_analista: ChatOp
 
 
 def responder_conversacion(pregunta_usuario: str, hist_text: str, llm_analista: ChatOpenAI) -> dict:
-    # ... (Tu código de conversación original - sin cambios)
     print("Generando respuesta conversacional...")
-    prompt_personalidad = f"""Tu nombre es IANA, una IA amable de automundial...
+    prompt_personalidad = f"""Tu nombre es IANA, una IA amable de autollantas. Ayuda a analizar datos.
+    Si el usuario hace un comentario casual, responde amablemente de forma natural, muy humana y redirígelo a tus capacidades.
     {hist_text}
     Pregunta: "{pregunta_usuario}" """
     try:
@@ -174,18 +275,34 @@ def responder_conversacion(pregunta_usuario: str, hist_text: str, llm_analista: 
         print(f"Error en conversación: {e}")
         return {"texto": f"Lo siento, hubo un problema. Error: {e}"}
 
-# --- FUNCIONES DE CORREO (LÓGICA RESTAURADA) ---
 
 def extraer_detalles_correo(pregunta_usuario: str, llm_analista: ChatOpenAI) -> dict:
     print("Extrayendo detalles para el correo...")
     contactos = dict(st.secrets.get("named_recipients", {}))
-    default_recipient_name = st.secrets.get("email_credentials", {}).get("default_recipient", "")
+    default_recipient = st.secrets.get("email_credentials", {}).get("default_recipient", "")
     
     prompt = f"""
-    Tu tarea es analizar la pregunta de un usuario y extraer los detalles para enviar un correo...
+    Tu tarea es analizar la pregunta de un usuario y extraer los detalles para enviar un correo. Tu output DEBE SER un JSON válido.
+
     Agenda de Contactos Disponibles: {', '.join(contactos.keys())}
+
     Pregunta del usuario: "{pregunta_usuario}"
-    (Pega aquí el resto de tu prompt de extracción de detalles)
+
+    Instrucciones para extraer:
+    1.  `recipient_name`: Busca un nombre de la "Agenda de Contactos" en la pregunta. Si encuentras un nombre (ej: "Oscar"), pon ese nombre aquí. Si encuentras una dirección de correo explícita (ej: "test@test.com"), pon la dirección completa aquí. Si no encuentras ni nombre ni correo, usa "default".
+    2.  `subject`: Crea un asunto corto y descriptivo basado en la pregunta.
+    3.  `body`: Crea un cuerpo de texto breve y profesional para el correo.
+
+    Ejemplo:
+    Pregunta: "envía el reporte a Oscar por favor"
+    JSON Output:
+    {{
+        "recipient_name": "Oscar",
+        "subject": "Reporte de Datos Solicitado",
+        "body": "Hola, como solicitaste, aquí tienes el reporte con los datos."
+    }}
+    
+    JSON Output para la pregunta actual:
     """
     try:
         response = llm_analista.invoke(prompt).content
@@ -199,7 +316,7 @@ def extraer_detalles_correo(pregunta_usuario: str, llm_analista: ChatOpenAI) -> 
         elif recipient_identifier in contactos:
             final_recipient = contactos[recipient_identifier]
         else:
-            final_recipient = default_recipient_name
+            final_recipient = default_recipient
 
         return {
             "recipient": final_recipient,
@@ -209,7 +326,7 @@ def extraer_detalles_correo(pregunta_usuario: str, llm_analista: ChatOpenAI) -> 
     except Exception as e:
         print(f"Error extrayendo detalles del correo: {e}")
         return {
-            "recipient": default_recipient_name,
+            "recipient": default_recipient,
             "subject": "Reporte de Datos - IANA",
             "body": "Adjunto encontrarás los datos solicitados."
         }
@@ -243,8 +360,6 @@ def enviar_correo_agente(recipient: str, subject: str, body: str, df: Optional[p
         print(f"Error al enviar correo: {e}")
         return {"texto": f"Lo siento, no pude enviar el correo. Detalle del error: {e}"}
 
-# Nota: La función validar_y_corregir_respuesta_analista no se está usando en el grafo actual,
-# pero la puedes dejar aquí para usarla en el futuro.
 def validar_y_corregir_respuesta_analista(pregunta_usuario: str, res_analisis: dict, hist_text: str):
-    # ... Tu lógica de validación aquí ...
+    # Esta función no se usa activamente en el grafo actual, pero se deja para el futuro
     pass
