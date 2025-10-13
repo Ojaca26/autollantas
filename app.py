@@ -38,7 +38,7 @@ def get_database_connection():
             # CONEXIÓN CORREGIDA: Se añade el parámetro `ssl_mode=DISABLED`
             uri = f"mysql+pymysql://{creds['user']}:{creds['password']}@{creds['host']}/{creds['database']}?ssl_mode=DISABLED"
             
-            db = SQLDatabase.from_uri(uri, include_tables=["automundial"]) # Asegúrate que el nombre de la tabla es correcto
+            db = SQLDatabase.from_uri(uri, include_tables=["autollantas"]) # Asegúrate que el nombre de la tabla es correcto
             
             # Prueba la conexión
             db.run("SELECT 1")
@@ -146,3 +146,4 @@ def procesar_pregunta(prompt: str):
 prompt = st.chat_input("Escribe tu pregunta aquí...")
 if prompt:
     procesar_pregunta(prompt)
+
