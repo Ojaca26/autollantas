@@ -1,8 +1,19 @@
+# Interfaz de usuario
 streamlit
+streamlit_mic_recorder
+
+# Manejo de datos
 pandas
+
+# Ecosistema de LangChain y LangGraph
 langchain
 langchain-openai
 langchain-community
 langgraph
+
+# Conexión a Base de Datos
 sqlalchemy
 pymysql
+
+# Reconocimiento de voz (fallback)
+SpeechRecognition
