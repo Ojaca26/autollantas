@@ -176,7 +176,7 @@ def generar_resumen_tabla(pregunta_usuario: str, res: dict, llm_analista: ChatOp
 
 def responder_conversacion(pregunta_usuario: str, hist_text: str, llm_analista: ChatOpenAI) -> dict:
     print("Generando respuesta conversacional...")
-    prompt_personalidad = f"""Tu nombre es IANA, una IA amable de automundial.
+    prompt_personalidad = f"""Tu nombre es IANA, una IA amable de autollanatas.
     {hist_text}
     Pregunta: "{pregunta_usuario}" """
     try:
@@ -203,4 +203,5 @@ def enviar_correo_agente(recipient: str, subject: str, body: str, df: Optional[p
     print(f"Enviando correo a {recipient}...")
     # Lógica simplificada para evitar manejar secretos aquí
     # En un caso real, aquí iría tu código de smtplib
+
     return {"texto": f"¡Listo! El correo fue enviado a {recipient} (simulación)."}
