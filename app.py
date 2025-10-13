@@ -26,21 +26,22 @@ with col2:
 # ============================================
 # 1) Conexión a BD, LLMs y Grafo (Manejo de Cache)
 # ============================================
-
 @st.cache_resource
 def get_database_connection():
-    """
-    Esta función se conecta a la base de datos usando los secretos de Streamlit.
-    """
     with st.spinner("🛰️ Conectando a la base de datos..."):
         try:
             creds = st.secrets["db_credentials"]
-            # CONEXIÓN CORREGIDA: Se añade el parámetro `ssl_mode=DISABLED`
-            uri = f"mysql+pymysql://{creds['user']}:{creds['password']}@{creds['host']}/{creds['database']}?ssl_mode=DISABLED"
             
-            db = SQLDatabase.from_uri(uri, include_tables=["autollantas"]) # Asegúrate que el nombre de la tabla es correcto
+            # VERIFICA ESTA PARTE: La URI debe estar limpia
+            uri = f"mysql+pymysql://{creds['user']}:{creds['password']}@{creds['host']}/{creds['database']}"
             
-            # Prueba la conexión
+            # VERIFICA ESTA PARTE: Los engine_args deben estar presentes
+            engine_args = {
+                "connect_args": {"ssl_disabled": True}
+            }
+
+            db = SQLDatabase.from_uri(uri, include_tables=["automundial"], engine_args=engine_args)
+            
             db.run("SELECT 1")
 
             st.success("✅ Conexión a la base de datos establecida.")
@@ -146,5 +147,6 @@ def procesar_pregunta(prompt: str):
 prompt = st.chat_input("Escribe tu pregunta aquí...")
 if prompt:
     procesar_pregunta(prompt)
+
 
 
