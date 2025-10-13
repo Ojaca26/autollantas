@@ -1,5 +1,5 @@
 # app.py
-
+# Forzando la actualización - v3
 import streamlit as st
 import pandas as pd
 from typing import Optional
@@ -146,4 +146,5 @@ def procesar_pregunta(prompt: str):
 prompt = st.chat_input("Escribe tu pregunta aquí...")
 if prompt:
     procesar_pregunta(prompt)
+
 
