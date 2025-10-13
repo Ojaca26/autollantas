@@ -100,7 +100,7 @@ Clasificación:
 def ejecutar_sql_real(pregunta_usuario: str, hist_text: str, llm_sql: ChatOpenAI, db: SQLDatabase):
     print("Traduciendo pregunta a SQL...")
     prompt_con_instrucciones = f"""
-    Tu tarea es generar una consulta SQL limpia (SOLO SELECT) sobre la tabla `automundial` para responder la pregunta del usuario.
+    Tu tarea es generar una consulta SQL limpia (SOLO SELECT) sobre la tabla `autollantas` para responder la pregunta del usuario.
     [... Aquí van todas tus reglas de negocio para SQL (margen, fechas, productos, etc.) ...]
     {hist_text}
     Pregunta del usuario: "{pregunta_usuario}"
@@ -205,3 +205,4 @@ def enviar_correo_agente(recipient: str, subject: str, body: str, df: Optional[p
     # En un caso real, aquí iría tu código de smtplib
 
     return {"texto": f"¡Listo! El correo fue enviado a {recipient} (simulación)."}
+
