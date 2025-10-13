@@ -100,7 +100,7 @@ Clasificación:
 def ejecutar_sql_real(pregunta_usuario: str, hist_text: str, llm_sql: ChatOpenAI, db: SQLDatabase):
     print("Traduciendo pregunta a SQL...")
     prompt_con_instrucciones = f"""
-    Tu tarea es generar una consulta SQL limpia (SOLO SELECT) sobre la tabla `autollantas` para responder la pregunta del usuario.
+    Tu tarea es generar una consulta SQL limpia (SOLO SELECT) sobre la tabla `automundial` para responder la pregunta del usuario.
     [... Aquí van todas tus reglas de negocio para SQL (margen, fechas, productos, etc.) ...]
     {hist_text}
     Pregunta del usuario: "{pregunta_usuario}"
@@ -176,7 +176,7 @@ def generar_resumen_tabla(pregunta_usuario: str, res: dict, llm_analista: ChatOp
 
 def responder_conversacion(pregunta_usuario: str, hist_text: str, llm_analista: ChatOpenAI) -> dict:
     print("Generando respuesta conversacional...")
-    prompt_personalidad = f"""Tu nombre es IANA, una IA amable de autollanatas.
+    prompt_personalidad = f"""Tu nombre es IANA, una IA amable de automundial.
     {hist_text}
     Pregunta: "{pregunta_usuario}" """
     try:
@@ -203,6 +203,4 @@ def enviar_correo_agente(recipient: str, subject: str, body: str, df: Optional[p
     print(f"Enviando correo a {recipient}...")
     # Lógica simplificada para evitar manejar secretos aquí
     # En un caso real, aquí iría tu código de smtplib
-
     return {"texto": f"¡Listo! El correo fue enviado a {recipient} (simulación)."}
-
