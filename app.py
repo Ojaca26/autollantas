@@ -11,6 +11,17 @@ from langchain_community.utilities import SQLDatabase
 # Importa el constructor del grafo
 from graph_builder import create_graph
 
+
+st.subheader("🕵️ Verificación de Secretos")
+try:
+    st.write("1. LANGCHAIN_TRACING_V2 es 'true':", st.secrets.get("LANGCHAIN_TRACING_V2") == "true")
+    st.write("2. LANGCHAIN_API_KEY existe y no está vacía:", "LANGCHAIN_API_KEY" in st.secrets and bool(st.secrets.get("LANGCHAIN_API_KEY")))
+    st.write("3. LANGCHAIN_PROJECT:", st.secrets.get("LANGCHAIN_PROJECT", "NO ENCONTRADO"))
+except Exception as e:
+    st.error(f"Ocurrió un error al intentar leer los secretos: {e}")
+st.divider()
+
+
 # ============================================
 # 0) Configuración de la Página y Título
 # ============================================
@@ -128,3 +139,4 @@ def procesar_pregunta(prompt: str):
 prompt = st.chat_input("Escribe tu pregunta aquí...")
 if prompt:
     procesar_pregunta(prompt)
+
