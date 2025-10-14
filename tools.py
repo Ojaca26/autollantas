@@ -11,6 +11,7 @@ from email.mime.application import MIMEApplication
 from typing import Optional
 
 import streamlit as st
+from elevenlabs.client import ElevenLabs
 from sqlalchemy import text
 from langchain_openai import ChatOpenAI
 from langchain_community.utilities import SQLDatabase
@@ -358,3 +359,25 @@ def validar_y_corregir_respuesta_analista(pregunta_usuario: str, res_analisis: d
     # Esta función no se usa activamente en el grafo actual, pero se deja para el futuro
     pass
 
+def text_to_audio_elevenlabs(text: str) -> bytes:
+    """
+    Convierte un texto en audio usando la API de ElevenLabs.
+    Devuelve los bytes del archivo de audio (ej. un MP3).
+    """
+    try:
+        # Se configura el cliente con la API key de los secretos
+        client = ElevenLabs(
+            api_key=st.secrets["elevenlabs_api_key"]
+        )
+
+        # Se genera el audio a partir del texto
+        audio_bytes = client.generate(
+            text=text,
+            voice="Rachel",  # Puedes usar cualquier voz. "Rachel" es una popular en inglés.
+            model="eleven_multilingual_v2" # Un buen modelo para múltiples idiomas
+        )
+        return audio_bytes
+
+    except Exception as e:
+        print(f"Error al generar audio con ElevenLabs: {e}")
+        return None
