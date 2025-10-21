@@ -41,54 +41,73 @@ with col2:
     st.markdown("Soy la red de agentes IA de **AutoLLantas**. Pregúntame algo sobre tu negocio.")
 
 # ============================================
-# 1) Conexión a BD, LLMs y Grafo
+# 1) Conexión a BD, LLMs y Grafo (REFACTORIZADO)
 # ============================================
 
-def initialize_connections():
-    if "db_connection_status" not in st.session_state:
-        st.session_state.db_connection_status = "pending"
-        st.session_state.db = None
-        st.session_state.llms = None
-        st.session_state.graph = None
+@st.cache_resource(show_spinner="🛰️ Conectando a la base de datos...")
+def get_db_connection():
+    """Crea y cachea la conexión a la base de datos."""
+    creds = st.secrets["db_credentials"]
+    uri = f"mysql+pymysql://{creds['user']}:{creds['password']}@{creds['host']}/{creds['database']}"
+    engine_args = {"connect_args": {"ssl_disabled": True}}
+    db = SQLDatabase.from_uri(uri, include_tables=["automundial"], engine_args=engine_args)
+    
+    # Prueba rápida de conexión
+    try:
+        db.run("SELECT 1")
+    except Exception as e:
+        st.error(f"Error al conectar a la base de datos: {e}")
+        # Detiene la app si la BD falla, ya que es crítico
+        st.stop() 
+    return db
 
-    if st.session_state.db_connection_status == "pending":
-        try:
-            with st.spinner("🛰️ Conectando a la base de datos..."):
-                creds = st.secrets["db_credentials"]
-                uri = f"mysql+pymysql://{creds['user']}:{creds['password']}@{creds['host']}/{creds['database']}"
-                engine_args = {"connect_args": {"ssl_disabled": True}}
-                db = SQLDatabase.from_uri(uri, include_tables=["automundial"], engine_args=engine_args)
-                db.run("SELECT 1")
-                st.session_state.db = db
-                st.success("✅ Conexión a la base de datos establecida.")
-                st.session_state.db_connection_status = "success"
-        except Exception as e:
-            st.error(f"Error al conectar a la base de datos: {e}")
-            st.session_state.db_connection_status = "failed"
-            return
+@st.cache_resource(show_spinner="🤝 Inicializando los LLMs...")
+def get_llms():
+    """Crea y cachea los modelos de lenguaje."""
+    try:
+        api_key = st.secrets["openai_api_key"]
+        model_name = "gpt-4o"
+        llms = {
+            "sql": ChatOpenAI(model=model_name, temperature=0.1, openai_api_key=api_key),
+            "analista": ChatOpenAI(model=model_name, temperature=0.1, openai_api_key=api_key),
+            "orq": ChatOpenAI(model=model_name, temperature=0.0, openai_api_key=api_key),
+            "validador": ChatOpenAI(model=model_name, temperature=0.0, openai_api_key=api_key),
+        }
+        return llms
+    except Exception as e:
+        st.error(f"Error al inicializar los LLMs (revisa tu API key): {e}")
+        st.stop()
 
-    if st.session_state.db_connection_status == "success" and not st.session_state.llms:
-        try:
-            with st.spinner("🤝 Inicializando la red de agentes IANA..."):
-                api_key = st.secrets["openai_api_key"]
-                model_name = "gpt-4o"
-                st.session_state.llms = {
-                    "sql": ChatOpenAI(model=model_name, temperature=0.1, openai_api_key=api_key),
-                    "analista": ChatOpenAI(model=model_name, temperature=0.1, openai_api_key=api_key),
-                    "orq": ChatOpenAI(model=model_name, temperature=0.0, openai_api_key=api_key),
-                    "validador": ChatOpenAI(model=model_name, temperature=0.0, openai_api_key=api_key),
-                }
-                st.success("✅ Agentes de IANA listos.")
-        except Exception as e:
-            st.error(f"Error al inicializar los LLMs: {e}")
-            return
+@st.cache_resource(show_spinner="🕸️ Construyendo la red de agentes...")
+def get_graph():
+    """
+    Crea el grafo de LangGraph.
+    Depende de get_db_connection() y get_llms().
+    """
+    # Llama a las otras funciones cacheadas.
+    # Si ya existen, las devuelve instantáneamente.
+    # Si no, las crea (mostrando sus spinners).
+    db = get_db_connection()
+    llms = get_llms()
+    
+    graph_app = create_graph(llms, db)
+    st.success("✅ Red de agentes IANA compilada con LangGraph.")
+    return graph_app
 
-    if st.session_state.db and st.session_state.llms and not st.session_state.graph:
-        with st.spinner("🕸️ Construyendo la red de agentes..."):
-            st.session_state.graph = create_graph(st.session_state.llms, st.session_state.db)
-            st.success("✅ Red de agentes IANA compilada con LangGraph.")
+# --- Bloque principal de inicialización ---
+# Intentamos obtener el grafo. Esto, por dependencia,
+# inicializará la BD y los LLMs en el orden correcto
+# y solo la primera vez.
+try:
+    get_graph() 
+    # Ya no necesitamos guardar esto en st.session_state
+    # porque podemos llamar a get_graph() desde cualquier parte.
+except Exception as e:
+    # Si algo falla en la cadena de caché (BD, LLM, Grafo),
+    # se mostrará el error específico de la función que falló.
+    st.error(f"❌ Error crítico durante la inicialización.")
+    # st.stop() es llamado dentro de las funciones si fallan.
 
-initialize_connections()
 
 # ============================================
 # 2) Interfaz: Chat y Procesamiento de Preguntas
@@ -107,8 +126,12 @@ for message in st.session_state.messages:
             st.markdown(content)
 
 def procesar_pregunta(prompt: str):
-    if not st.session_state.graph:
-        st.error("La red de agentes no está inicializada. Revisa los mensajes de error de conexión o de API keys más arriba.")
+    try:
+        # Obtenemos el grafo desde la caché.
+        # Esto es instantáneo si ya fue creado.
+        graph = get_graph() 
+    except Exception as e:
+        st.error(f"Error al obtener la red de agentes: {e}")
         return
 
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -121,7 +144,8 @@ def procesar_pregunta(prompt: str):
                 "pregunta_usuario": prompt,
                 "historial_chat": st.session_state.messages
             }
-            final_state = st.session_state.graph.invoke(initial_state)
+            # Usamos la variable local 'graph'
+            final_state = graph.invoke(initial_state)
 
             response_content = {}
             response_text = None
@@ -141,9 +165,9 @@ def procesar_pregunta(prompt: str):
                     st.dataframe(response_content["df"])
                 
                 if final_state.get("clasificacion") == "analista" and final_state.get("analisis"):
-                     response_content["analisis"] = final_state["analisis"]
-                     if not response_text: # Si no había ya una respuesta de texto, usamos el análisis para el audio
-                         response_text = final_state.get("analisis")
+                    response_content["analisis"] = final_state["analisis"]
+                    if not response_text: # Si no había ya una respuesta de texto, usamos el análisis para el audio
+                        response_text = final_state.get("analisis")
 
             st.session_state.messages.append({"role": "assistant", "content": response_content})
 
