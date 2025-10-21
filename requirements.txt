@@ -2,6 +2,7 @@ streamlit
 streamlit_mic_recorder
 pandas
 langchain
+langchain-chains
 langchain-openai
 langchain-community
 langgraph
@@ -9,3 +10,4 @@ sqlalchemy
 pymysql
 elevenlabs
 SpeechRecognition
+
