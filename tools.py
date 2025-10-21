@@ -1,5 +1,3 @@
-# tools.py
-
 import pandas as pd
 import re
 import io
@@ -113,23 +111,23 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str, llm_sql: ChatOpenAI
     ---
     <<< NUEVA REGLA: PARA VALORES MONETARIOS >>>
      1. Cuando el usuario mencione “margen”, “margen bruto” o “ganancia bruta”, se debe consultar la información en la columna 'Porcentaje_Margen_Bruto', que representa el **margen relativo** (porcentaje de utilidad sobre ventas).  
-       Si el usuario pide explícitamente “margen en pesos”, “margen monetario” o “margen absoluto”, entonces usa la columna 'Margen_Bruto', que representa el **margen absoluto** (valor monetario de la utilidad bruta).  
-       Ejemplo:  
-       - “Dame el margen bruto por mes” → usa `Porcentaje_Margen_Bruto`  
-       - “Dame el margen absoluto en pesos” → usa `Margen_Bruto`
-       
-       ❗Nunca promedies el margen ni uses AVG(Porcentaje_Margen_Bruto).  
-       El margen relativo SIEMPRE debe calcularse dinámicamente como:
+        Si el usuario pide explícitamente “margen en pesos”, “margen monetario” o “margen absoluto”, entonces usa la columna 'Margen_Bruto', que representa el **margen absoluto** (valor monetario de la utilidad bruta).  
+        Ejemplo:  
+        - “Dame el margen bruto por mes” → usa `Porcentaje_Margen_Bruto`  
+        - “Dame el margen absoluto en pesos” → usa `Margen_Bruto`
+        
+        ❗Nunca promedies el margen ni uses AVG(Porcentaje_Margen_Bruto).  
+        El margen relativo SIEMPRE debe calcularse dinámicamente como:
          (1 - SUM(Costo_Reales) / SUM(Ventas_Reales)) * 100
-       o equivalente:
+        o equivalente:
          (SUM(Ventas_Reales - Costo_Reales) / SUM(Ventas_Reales)) * 100
-       según el nivel de agrupación.
-       Ejemplo:
-       SELECT MONTH(Fecha) AS Mes, 
-              (1 - SUM(Costo_Reales) / SUM(Ventas_Reales)) * 100 AS Margen_Porcentual
-       FROM autollantas
-       GROUP BY MONTH(Fecha);
-       
+        según el nivel de agrupación.
+        Ejemplo:
+        SELECT MONTH(Fecha) AS Mes,  
+               (1 - SUM(Costo_Reales) / SUM(Ventas_Reales)) * 100 AS Margen_Porcentual
+        FROM autollantas
+        GROUP BY MONTH(Fecha);
+        
      2. Cuando el usuario mencione “porcentaje de margen”, “% margen”, “margen porcentual” o “margen en porcentaje”, se debe consultar la información en la columna 'Porcentaje_Margen_Bruto', que representa la proporción del margen bruto sobre las ventas reales.
      3. Cuando el usuario mencione “unidades vendidas”, “cantidad de productos vendidos” o “número de ventas”, se está refiriendo al campo 'Unidades_Vendidas'.
      4. Cuando el usuario pregunte por “precio promedio”, “valor medio de venta” o “promedio de precios”, se refiere al campo 'Precio_Promedio', que corresponde al promedio del valor unitario de las ventas.
@@ -180,11 +178,15 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str, llm_sql: ChatOpenAI
         print(f"Error al ejecutar SQL: {e}")
         return {"sql": None, "df": None, "error": str(e)}
 
-
-def analizar_con_datos(pregunta_usuario: str, hist_text: str, df: Optional[pd.DataFrame], llm_analista: ChatOpenAI) -> str:
+# ==========================================================
+# FUNCIÓN ACTUALIZADA (acepta 'critica')
+# ==========================================================
+def analizar_con_datos(pregunta_usuario: str, hist_text: str, df: Optional[pd.DataFrame], llm_analista: ChatOpenAI, critica: Optional[str] = None) -> str:
     print("Generando análisis de datos...")
     preview = _df_preview(df) or "(sin datos para analizar)"
-    prompt_analisis = f"""
+    
+    # Construcción modular del prompt
+    prompt_base = f"""
     Eres IANA, un analista de datos senior EXTREMADAMENTE PRECISO y riguroso.
     ---
     <<< REGLAS CRÍTICAS DE PRECISIÓN >>>
@@ -198,17 +200,33 @@ def analizar_con_datos(pregunta_usuario: str, hist_text: str, df: Optional[pd.Da
     Datos para tu análisis (usa SÓLO estos):
     {preview}
     ---
-    FORMATO OBLIGATORIO:
-    📌 Análisis Ejecutivo de datos:
-    1. Calcular totales y porcentajes clave.
-    2. Detectar concentración.
-    3. Identificar patrones temporales.
-    4. Analizar dispersión.
-    Entregar el resultado en 3 bloques:
-    📌 Resumen Ejecutivo: hallazgos principales con números.
-    🔍 Números de referencia: totales, promedios, ratios.
-    ⚠ Importante: Sé muy breve, directo y diciente.
     """
+
+    prompt_formato = """
+    FORMATO OBLIGATORIO:
+    Entregar el resultado en 3 bloques:
+    📌 **Resumen Ejecutivo**: El hallazgo principal (el "bottom line") en una o dos frases, con los números más importantes.
+    🔍 **Números Clave**: Una lista corta (bullet points) de los totales, promedios, o ratios más relevantes que soportan tu resumen.
+    ⚠ **Observaciones Importantes** (Opcional): Si notas algo atípico, una concentración alta (ej. 80% en un cliente) o un dato faltante, menciónalo aquí.
+
+    Sé muy breve, directo y diciente.
+    """
+
+    # Si hay una crítica del supervisor, se añade al prompt.
+    if critica:
+        print(f"--- Analista Recibiendo Crítica: {critica} ---")
+        prompt_correccion = f"""
+        <<< ATENCIÓN: CORRECCIÓN REQUERIDA >>>
+        Tu análisis anterior fue rechazado por el supervisor de calidad.
+        Crítica del supervisor: "{critica}"
+        
+        Por favor, genera un NUEVO análisis corrigiendo este punto. Sé muy riguroso con la crítica y revisa TODOS los números de nuevo.
+        <<< FIN DE LA CORRECCIÓN >>>
+        """
+        prompt_analisis = prompt_base + prompt_correccion + prompt_formato
+    else:
+        prompt_analisis = prompt_base + prompt_formato
+
     try:
         analisis = llm_analista.invoke(prompt_analisis).content
         return analisis
@@ -222,7 +240,6 @@ def generar_resumen_tabla(pregunta_usuario: str, res: dict, llm_analista: ChatOp
     if df is None or df.empty:
         return res
 
-    # --- INICIO DE LA MODIFICACIÓN DEL PROMPT ---
     prompt = f"""
     <<< REGLA CRÍTICA >>>
     Tu ÚNICA tarea es escribir una frase CORTA y amable que sirva como introducción a la tabla de datos que se mostrará.
@@ -248,7 +265,6 @@ def generar_resumen_tabla(pregunta_usuario: str, res: dict, llm_analista: ChatOp
 
     Ahora, genera la introducción para la pregunta del usuario actual. Sé breve.
     """
-    # --- FIN DE LA MODIFICACIÓN DEL PROMPT ---
     try:
         introduccion = llm_analista.invoke(prompt).content
         res["texto"] = introduccion
@@ -355,9 +371,72 @@ def enviar_correo_agente(recipient: str, subject: str, body: str, df: Optional[p
         print(f"Error al enviar correo: {e}")
         return {"texto": f"Lo siento, no pude enviar el correo. Detalle del error: {e}"}
 
-def validar_y_corregir_respuesta_analista(pregunta_usuario: str, res_analisis: dict, hist_text: str):
-    # Esta función no se usa activamente en el grafo actual, pero se deja para el futuro
-    pass
+# ==========================================================
+# FUNCIÓN ACTUALIZADA (Implementación del Supervisor QA)
+# ==========================================================
+def validar_y_corregir_respuesta_analista(llm: ChatOpenAI, pregunta: str, df: Optional[pd.DataFrame], analisis: str) -> dict:
+    """
+    Actúa como un supervisor de QA. Valida la respuesta del analista contra los datos
+    y decide si aprobarla o enviarla a revisión.
+    """
+    print("--- 🕵️‍♀️ Supervisor QA: Validando análisis... ---")
+    preview = _df_preview(df) or "(sin datos)"
+    
+    prompt_validador = f"""
+    Eres un Supervisor de Calidad de IA (QA) EXTREMADAMENTE estricto.
+    Tu trabajo es validar si la respuesta de un "Agente Analista" es precisa, completa y se basa ESTRICTAMENTE en los datos proporcionados.
+
+    ---
+    1. Pregunta Original del Usuario:
+    "{pregunta}"
+
+    2. Datos que el analista usó (previsualización):
+    "{preview}"
+
+    3. Análisis generado por el Agente Analista (el que debes validar):
+    "{analisis}"
+    ---
+
+    REGLAS DE VALIDACIÓN:
+    1.  **Precisión Absoluta**: ¿Son correctos TODOS los números, totales, promedios y porcentajes mencionados en el análisis, basándose en los "Datos"?
+    2.  **No Alucinación**: ¿El análisis menciona algún producto, cliente, mes o dato que NO esté en la tabla de "Datos"? Si lo hace, es un error grave.
+    3.  **Respuesta Completa**: ¿El análisis responde directamente a la "Pregunta Original del Usuario"?
+    4.  **Tono**: ¿El análisis es profesional y directo?
+
+    ---
+    TU TAREA:
+    Responde con un JSON. Tu respuesta debe ser SOLO el JSON.
+
+    Si el análisis es PERFECTO (cumple todas las reglas):
+    {{
+      "decision": "aprobar",
+      "comentario": "El análisis es preciso y responde bien a la pregunta."
+    }}
+
+    Si el análisis tiene CUALQUIER error (alucinación, cálculo incorrecto, no responde la pregunta):
+    {{
+      "decision": "revisar",
+      "comentario": "[Explica BREVEMENTE el error. Ej: 'El total de ventas es incorrecto, la suma da X y no Y.' o 'El análisis menciona a un cliente que no está en los datos.' o 'El análisis no responde laf pregunta sobre el margen.']"
+    }}
+
+    JSON de Decisión:
+    """
+    
+    try:
+        response_str = llm.invoke(prompt_validador).content
+        json_response = response_str.strip().replace("```json", "").replace("```", "").strip()
+        decision = json.loads(json_response)
+        
+        if decision.get("decision") not in ["aprobar", "revisar"]:
+            print("Decisión inválida del validador. Aprobando por defecto.")
+            decision = {"decision": "aprobar", "comentario": "Decisión de validador inválida."}
+        
+        return decision
+    except Exception as e:
+        print(f"Error en el validador, aprobando por defecto: {e}")
+        # Fallback seguro: si el validador falla, aprueba la respuesta para no bloquear al usuario.
+        return {"decision": "aprobar", "comentario": "Validación fallida, aprobado por defecto."}
+
 
 def text_to_audio_elevenlabs(text: str) -> bytes:
     """
