@@ -11,7 +11,8 @@ from typing import Optional
 import streamlit as st
 from elevenlabs.client import ElevenLabs
 from sqlalchemy import text
-from langchain_community.chains.sql_database.base import create_sql_query_chain
+from langchain.chains import create_sql_query_chain
+#from langchain_community.chains.sql_database.base import create_sql_query_chain
 from langchain_community.utilities import SQLDatabase
 from langchain_openai import ChatOpenAI
 
@@ -460,6 +461,7 @@ def text_to_audio_elevenlabs(text: str) -> bytes:
     except Exception as e:
         print(f"Error al generar audio con ElevenLabs: {e}")
         return None
+
 
 
 
