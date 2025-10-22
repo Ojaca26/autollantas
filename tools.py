@@ -13,7 +13,7 @@ from elevenlabs.client import ElevenLabs
 from sqlalchemy import text
 from langchain_openai import ChatOpenAI
 from langchain_community.utilities import SQLDatabase
-from langchain_community.sql_database import create_sql_query_chain
+from langchain.chains.sql_database import create_sql_query_chain
 
 # ============================================
 # FUNCIONES AUXILIARES PARA DATOS
@@ -460,6 +460,7 @@ def text_to_audio_elevenlabs(text: str) -> bytes:
     except Exception as e:
         print(f"Error al generar audio con ElevenLabs: {e}")
         return None
+
 
 
 
