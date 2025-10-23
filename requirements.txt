@@ -6,8 +6,8 @@ pymysql==1.1.2
 elevenlabs==2.20.1
 SpeechRecognition==3.14.3
 
-langchain==1.0.2
-langchain-community==0.4.0
 langchain-openai==1.0.1
 langgraph==1.0.1
+langchain==1.0.2
+langchain-community==0.4.0
 langsmith==0.4.37
