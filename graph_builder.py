@@ -287,3 +287,20 @@ def create_graph(llms: dict, db: SQLDatabase):
     app = workflow.compile()
 
     return app
+
+# ===============================================================
+# 5. EXPORTAR EL GRAFO EN FORMATO MERMAID (VISUALIZACIÓN)
+# ===============================================================
+def export_graph_mermaid(graph):
+    """
+    Exporta el grafo de agentes a formato Mermaid para visualizarlo
+    en Streamlit o en https://mermaid.live
+    """
+    try:
+        mermaid_code = graph.get_graph().draw_mermaid()
+        print("Código Mermaid del flujo:")
+        print(mermaid_code)
+        return mermaid_code
+    except Exception as e:
+        print(f"Error al exportar gráfico Mermaid: {e}")
+        return None
