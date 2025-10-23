@@ -1,12 +1,14 @@
-streamlit
-streamlit_mic_recorder
-pandas
-sqlalchemy
-pymysql
-elevenlabs
-SpeechRecognition
+streamlit==1.50.0
+streamlit_mic_recorder==0.0.8
+pandas==2.3.3
+sqlalchemy==2.0.44
+pymysql==1.1.2
+elevenlabs==2.20.1
+SpeechRecognition==3.14.3
 
-langchain==0.3.7
-langchain-community==0.3.7
+# --- IA stack estable ---
+langchain==1.0.2
+langchain-community==0.4
+langchain-openai==1.0.1
 langgraph==1.0.1
-langchain-openai==0.2.6
+langsmith==0.4.37
