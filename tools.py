@@ -15,7 +15,8 @@ from langchain_community.utilities import SQLDatabase
 from langchain_openai import ChatOpenAI
 #from langchain.chains import create_sql_query_chain
 #from langchain_community.chains.sql_database.base import create_sql_query_chain
-from langchain_community.chains.sql_database.base import create_sql_query_chain
+#from langchain_community.chains.sql_database.base import create_sql_query_chain
+from langchain_community.tools.sql_database.tool import QuerySQLDataBaseTool
 
 
 # ============================================
@@ -158,8 +159,13 @@ def ejecutar_sql_real(pregunta_usuario: str, hist_text: str, llm_sql: ChatOpenAI
     Devuelve SOLO la consulta SQL (sin explicaciones).
     """
     try:
-        query_chain = create_sql_query_chain(llm_sql, db)
-        sql_query_bruta = query_chain.invoke({"question": prompt_con_instrucciones})
+        # Crear la herramienta moderna de consulta SQL
+        query_tool = QuerySQLDataBaseTool(db=db)
+
+        # Invocar la herramienta con tu prompt generado
+        sql_query_bruta = query_tool.invoke({"query": prompt_con_instrucciones})
+
+        # Limpiar la salida para quedarte solo con la parte SQL
         m = re.search(r'(?is)(select\b.+)$', sql_query_bruta.strip())
         sql_query_limpia = m.group(1).strip() if m else sql_query_bruta.strip()
         sql_query_limpia = re.sub(r'(?is)^```sql|```$', '', sql_query_limpia).strip()
@@ -463,6 +469,7 @@ def text_to_audio_elevenlabs(text: str) -> bytes:
     except Exception as e:
         print(f"Error al generar audio con ElevenLabs: {e}")
         return None
+
 
 
 
