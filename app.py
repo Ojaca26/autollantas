@@ -8,8 +8,10 @@ from langchain_community.utilities import SQLDatabase
 from graph_builder import create_graph
 from tools import text_to_audio_elevenlabs
 from streamlit_mic_recorder import mic_recorder
-from langchain_core.tracers.langsmith import LangSmithTracer
+#from langchain_core.tracers.langsmith import LangSmithTracer
 import os
+from langchain.tracers import LangSmithTracer
+
 
 # --- CÓDIGO DE DEPURACIÓN TEMPORAL (PUEDES BORRARLO DESPUÉS) ---
 st.subheader("🕵️ Verificación de Secretos")
@@ -102,6 +104,14 @@ def get_graph():
     graph_app = create_graph(llms, db)
     st.success("✅ Red de agentes IANA compilada con LangGraph.")
     return graph_app
+
+from graph_builder import export_graph_mermaid
+
+mermaid_code = export_graph_mermaid(graph_app)
+if mermaid_code:
+    st.markdown("### 🧭 Diagrama del flujo de agentes (Mermaid)")
+    st.code(mermaid_code, language="mermaid")
+
 
 # --- Bloque principal de inicialización ---
 # Intentamos obtener el grafo. Esto, por dependencia,
@@ -219,4 +229,5 @@ if audio_bytes:
     # Por ahora, simularemos la transcripción
     st.warning("Funcionalidad de voz a texto no implementada en este ejemplo. Procesando como si fuera un texto de prueba.")
     procesar_pregunta("Esta es una prueba de voz.")
+
 
