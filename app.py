@@ -3,17 +3,13 @@
 import streamlit as st
 import pandas as pd
 from typing import Optional
-
-# LangChain + Conexión
 from langchain_openai import ChatOpenAI
 from langchain_community.utilities import SQLDatabase
-
-# Importa el constructor del grafo y la herramienta de audio
 from graph_builder import create_graph
 from tools import text_to_audio_elevenlabs
-
-# Componente de micrófono
 from streamlit_mic_recorder import mic_recorder
+from langchain_core.tracers.langsmith import LangSmithTracer
+import os
 
 # --- CÓDIGO DE DEPURACIÓN TEMPORAL (PUEDES BORRARLO DESPUÉS) ---
 st.subheader("🕵️ Verificación de Secretos")
@@ -26,6 +22,19 @@ except Exception as e:
     st.error(f"Ocurrió un error al intentar leer los secretos: {e}")
 st.divider()
 # --- FIN DEL CÓDIGO DE DEPURACIÓN ---
+
+# Configurar variables de entorno desde secrets
+if "LANGCHAIN_API_KEY" in st.secrets:
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_API_KEY"] = st.secrets["LANGCHAIN_API_KEY"]
+    os.environ["LANGCHAIN_PROJECT"] = st.secrets.get("LANGCHAIN_PROJECT", "default")
+
+    # Inicializar el tracer de LangSmith
+    tracer = LangSmithTracer(project_name=os.environ["LANGCHAIN_PROJECT"])
+    st.success("✅ Conectado a LangSmith correctamente.")
+else:
+    tracer = None
+    st.warning("⚠️ No se encontró LANGCHAIN_API_KEY en los secretos. No se enviarán trazas a LangSmith.")
 
 
 # ============================================
@@ -145,7 +154,8 @@ def procesar_pregunta(prompt: str):
                 "historial_chat": st.session_state.messages
             }
             # Usamos la variable local 'graph'
-            final_state = graph.invoke(initial_state)
+            config = {"callbacks": [tracer]} if tracer else {}
+            final_state = graph.invoke(initial_state, config=config)
 
             response_content = {}
             response_text = None
@@ -209,3 +219,4 @@ if audio_bytes:
     # Por ahora, simularemos la transcripción
     st.warning("Funcionalidad de voz a texto no implementada en este ejemplo. Procesando como si fuera un texto de prueba.")
     procesar_pregunta("Esta es una prueba de voz.")
+
